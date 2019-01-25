@@ -9,10 +9,12 @@ function parser.lexRegex(regexStr)
     return regexStr:sub(1, 1)
   end
 
+  local pos = 0
   local function eatc()
     local c = peek()
     termEaten = termEaten .. c
     regexStr = regexStr:sub(2)
+    pos = pos + 1
     return c
   end
 
@@ -37,14 +39,16 @@ function parser.lexRegex(regexStr)
     ["("] = "l-paren",
     [")"] = "r-paren",
     ["."] = "any",
+    ["^"] = "start",
     ["$"] = "eos",
     ["\\"] = function()
-      local metas = {d = "[0-9]", w = "[a-zA-Z]"}
+      local metas = {d = "[0-9]", w = "[a-zA-Z]", n = "\n"}
 
       local c = eatc()
       if metas[c] then
 
         regexStr = metas[c] .. regexStr
+        pos = pos - #metas[c]
 
         return false
       end
@@ -81,10 +85,13 @@ function parser.lexRegex(regexStr)
     if ret then
       tokens[#tokens + 1] = {
         type = ret,
-        source = termEaten
+        source = termEaten,
+        position = pos
       }
     end
   end
+
+  tokens[#tokens + 1] = {type = "eof", source = ""}
 
   return tokens
 end
@@ -93,10 +100,10 @@ end
 
 Grammar:
 
-<RE>    ::=     <union> | <simple-RE>
-<union>     ::= <RE> "|" <simple-RE>
-<simple-RE>     ::=     <concatenation> | <basic-RE>
-<concatenation>     ::= <simple-RE> <basic-RE>
+<RE>         ::= <simple-RE> <union-list>
+<union-list> ::= "|" <simple-RE> <union-list> | <lambda>
+<simple-RE>     ::= <basic-RE> <basic-RE-list>
+<basic-RE-list> ::= <basic-RE> <basic-RE-list> | <lambda>
 <basic-RE>  ::= <star> | <plus> | <ng-star> | <ng-plus> | <elementary-RE>
 <star>  ::= <elementary-RE> "*"
 <plus>  ::= <elementary-RE> "+"
@@ -119,60 +126,178 @@ Special Chars: | * + *? +? ( ) . $ \ [ [^ ] -
 ]]
 
 function parser.parse(tokenList)
-  local RE, union, simpleRE, concatenation, basicRE, star, plus, ngStar, ngPlus, elementaryRE
-  local group, any, eos, char, set, positiveSet, negativeSet, setItems, setItem, range
+  local RE, unionList, simpleRE, basicRE, basicREList, elementaryRE, group, set, setItems, setItem
 
-  local function lookFor(tokenType, reverseDirection)
-    if reverseDirection then
-      for i = #tokenList, 1, -1 do
-        if tokenList[i].type == tokenType then
-          return i
-        end
-      end
+  local parseTable = {
+    unionList = {["union"] = 1, default = 2},
+    basicREList = {["union"] = 2, ["r-paren"] = 2, ["eof"] = 2, default = 1},
+    elementaryRE = {["l-paren"] = 1, ["any"] = 2, ["char"] = 3, ["open-set"] = 4, ["open-negset"] = 4},
+    setItems = {["close-set"] = 1, default = 2}
+  }
+
+  local function eat()
+    return table.remove(tokenList, 1)
+  end
+
+  local function uneat(token)
+    table.insert(tokenList, 1, token)
+  end
+
+  local function getMyType(name, index)
+    local parseFn = parseTable[name][tokenList[index or 1].type] or parseTable[name].default
+
+    if not parseFn then
+      error("Unexpected token '" .. tokenList[index or 1].type .. "' at position " .. tokenList[index or 1].position, 0)
+    end
+
+    return parseFn
+  end
+
+  local function unrollLoop(container)
+    local list, i = {}, 1
+
+    while container do
+      list[i], i = container[1], i + 1
+      container = container[2]
+    end
+
+    return unpack(list)
+  end
+
+  -- <RE> ::= <simple-RE> <union-list>
+  function RE()
+    return {type = "RE", simpleRE(), unrollLoop(unionList())}
+  end
+
+  -- <union-list> ::= "|" <simple-RE> <union-list> | <lambda>
+  function unionList()
+    local parseFn = getMyType("unionList")
+
+    if parseFn == 1 then
+      eat()
+      return {type = "unionList", simpleRE(), unionList()}
     else
-      for i = 1, #tokenList do
-        if tokenList[i].type == tokenType then
-          return i
-        end
-      end
+      return
+    end
+  end
+
+  -- <simple-RE> ::= <basic-RE> <basic-RE-list>
+  function simpleRE()
+    return {type = "simpleRE", basicRE(), unrollLoop(basicREList())}
+  end
+
+  -- <basic-RE> ::= <star> | <plus> | <ng-star> | <ng-plus> | <elementary-RE>
+  function basicRE()
+    local atom = elementaryRE()
+
+    local token = eat()
+    local type = token.type
+    if type == "star" then
+      return {type = "star", atom}
+    elseif type == "plus" then
+      return {type = "plus", atom}
+    elseif type == "ng-star" then
+      return {type = "ng-star", atom}
+    elseif type == "ng-plus" then
+      return {type = "ng-plus", atom}
+    else
+      uneat(token)
+      return {type = "atom", atom}
+    end
+  end
+
+  -- <basic-RE-list> ::= <basic-RE> <basic-RE-list> | <lambda>
+  function basicREList()
+    local parseFn = getMyType("basicREList")
+
+    if parseFn == 1 then
+      return {type = "basicREList", basicRE(), basicREList()}
+    else
+      return
+    end
+  end
+
+  -- <elementary-RE> ::= <group> | <any> | <char> | <set>
+  function elementaryRE()
+    local parseFn = getMyType("elementaryRE")
+
+    if parseFn == 1 then
+      return group()
+    elseif parseFn == 2 then
+      eat()
+      return {type = "any"}
+    elseif parseFn == 3 then
+      local token = eat()
+      return {type = "char", value = token.source}
+    elseif parseFn == 4 then
+      return set()
+    end
+  end
+
+  -- <group> ::= "(" <RE> ")"
+  function group()
+    eat()
+    local rexp = RE()
+    eat()
+
+    return {type = "group", rexp}
+  end
+
+  --<set>   ::=     <positive-set> | <negative-set>
+  function set()
+    local openToken = eat()
+
+    local ret
+    if openToken.type == "open-set" then
+      ret = {type = "set", unrollLoop(setItems())}
+    else -- open-negset
+      ret = {type = "negset", unrollLoop(setItems())}
     end
 
-    return false
+    eat()
+
+    return ret
   end
 
-  local function subset(ts, start, endi)
-    endi = endi or #ts
+  -- <set-items> ::= <set-item> | <set-item> <set-items>
+  function setItems()
+    local firstItem = setItem()
+    local parseFn = getMyType("setItems")
 
-    local t = {}
-    local j = 0
-    for i = start, endi do
-      j = j + 1
-      t[j] = ts[i]
+    if parseFn == 1 then
+      return {type = "setItems", firstItem}
+    else
+      return {type = "setItems", firstItem, setItems()}
     end
-
-    return t
   end
 
-  -- <RE> ::= <union> | <simple-RE>
-  function RE(ts)
-    -- TODO: Parse simple-re's until there are no tokens left
-
-    local ui = lookFor("union", true)
-    if ui then
-      return {type = "RE", union(ts, ui)}
+  -- <set-item> ::= <range> | <char>
+  function setItem()
+    if tokenList[2].type == "range" then
+      return {type = "range", start = eat().source, finish = (eat() and eat()).source}
+    else
+      return {type = "char", value = eat().source}
     end
-
-    return {type = "RE", simpleRE(ts)}
   end
 
-  -- <union> ::= <RE> "|" <simple-RE>
-  function union(ts, index)
-    return {type = "union", RE(subset(ts, 1, index - 1)), simpleRE(subset(ts, index + 1))}
+  local props = {
+    clampStart = false,
+    clampEnd = false
+  }
+
+  if tokenList[1].type == "start" then
+    props.clampStart = true
+    table.remove(tokenList, 1)
   end
 
-  function simpleRE(ts)
-
+  if tokenList[#tokenList - 1].type == "eos" then
+    props.clampEnd = true
+    table.remove(tokenList, #tokenList - 1)
   end
+
+  local ret = RE()
+  ret.properties = props
+  return ret
 end
 
 return parser

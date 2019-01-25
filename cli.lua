@@ -17,6 +17,7 @@ local helpStr = [[
     -o <outputFile> : Redirect output to a file instead of stdout
 
     -l : Stop after lex stage
+    -p : Stop after parse stage
 
   <regex>: The regex source as a string
 ]]
@@ -29,7 +30,7 @@ local stopStage = "none"
 
 local regexSrc
 local outputFile = io.stdout
-getopt({...}, "-o:hl", {
+getopt({...}, "-o:hlp", {
   help = {
     hasArg = getopt.noArgument,
     val = "h"
@@ -56,6 +57,9 @@ getopt({...}, "-o:hl", {
   end,
   l = function()
     stopStage = "lex"
+  end,
+  p = function()
+    stopStage = "parse"
   end
 }
 
@@ -67,6 +71,13 @@ end
 local tokens = parser.lexRegex(regexSrc)
 if stopStage == "lex" then
   pprint(tokens)
+
+  return
+end
+
+local parsedRegex = parser.parse(tokens)
+if stopStage == "parse" then
+  pprint(parsedRegex)
 
   return
 end
