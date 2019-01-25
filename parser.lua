@@ -36,6 +36,7 @@ function parser.lexRegex(regexStr)
 
       return "plus"
     end,
+    ["?"] = "optional",
     ["("] = "l-paren",
     [")"] = "r-paren",
     ["."] = "any",
@@ -200,6 +201,8 @@ function parser.parse(tokenList)
       return {type = "ng-star", atom}
     elseif type == "ng-plus" then
       return {type = "ng-plus", atom}
+    elseif type == "optional" then
+      return {type = "optional", atom}
     else
       uneat(token)
       return {type = "atom", atom}

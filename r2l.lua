@@ -8,6 +8,7 @@ r2l.parser = require("parser")
 local util = require("util")
 
 r2l.epsilon = {type = "epsilon"} -- Special value for epsilon transition
+r2l.any = {type = "any"}
 
 local nameCounter = 0
 local function genName()
@@ -73,9 +74,10 @@ end
 function r2l.generateFromCapture(atom)
   local capture = atom[1]
 
+  local machine
   if capture.type == "char" then
     local sName, cName = genName(), genName()
-    return {
+    machine = {
       states = {
         [sName] = {edges = {{condition = capture.value, dest = cName}}},
         [cName] = {edges = {}}
@@ -83,8 +85,91 @@ function r2l.generateFromCapture(atom)
       startState = sName,
       acceptStates = {[cName] = true}
     }
+  elseif capture.type == "any" then
+    local sName, cName = genName(), genName()
+    machine = {
+      states = {
+        [sName] = {edges = {{condition = r2l.any, dest = cName}}},
+        [cName] = {edges = {}}
+      },
+      startState = sName,
+      acceptStates = {[cName] = true}
+    }
+  elseif capture.type == "set" then
+    local sName, cName = genName(), genName()
+    machine = {
+      states = {
+        [sName] = {edges = {}},
+        [cName] = {edges = {}}
+      },
+      startState = sName,
+      acceptStates = {[cName] = true}
+    }
+
+    local tState = machine.states[sName]
+    for i = 1, #capture do
+      local match = capture[i]
+      if match.type == "char" then
+        tState[#tState + 1] = {condition = match.value, dest = cName}
+      elseif match.type == "range" then
+        local dir = match.finish:byte() - match.start:byte()
+        dir = dir / math.abs(dir)
+
+        for j = match.start:byte(), match.finish:byte(), dir do
+          tState[#tState + 1] = {condition = string.char(j), dest = cName}
+        end
+      end
+    end
   else
     error("Unimplemented capture: '" .. capture.type .. "'")
+  end
+
+  if atom.type == "atom" then
+    return machine
+  elseif atom.type == "plus" then
+    for k in pairs(machine.acceptStates) do
+      local es = machine.states[k].edges
+      es[#es + 1] = {condition = r2l.epsilon, dest = machine.startState}
+    end
+
+    return machine
+  elseif atom.type == "ng-plus" then
+    for k in pairs(machine.acceptStates) do
+      local es = machine.states[k].edges
+      es[#es + 1] = {condition = r2l.epsilon, priority = "low", dest = machine.startState}
+    end
+
+    return machine
+  elseif atom.type == "star" then
+    local needStart = true
+    for k in pairs(machine.acceptStates) do
+      local es = machine.states[k].edges
+      es[#es + 1] = {condition = r2l.epsilon, dest = machine.startState}
+      if k == machine.startState then
+        needStart = false
+      end
+    end
+
+    if needStart then
+      machine.acceptStates[machine.startState] = true
+    end
+
+    return machine
+  elseif atom.type == "ng-star" then
+    local needStart = true
+    for k in pairs(machine.acceptStates) do
+      local es = machine.states[k].edges
+      es[#es + 1] = {condition = r2l.epsilon, priority = "low", dest = machine.startState}
+      if k == machine.startState then
+        needStart = false
+      end
+    end
+
+    if needStart then
+      machine.acceptStates[machine.startState] = true
+    end
+
+    return machine
   end
 end
 
