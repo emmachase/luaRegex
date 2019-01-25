@@ -91,7 +91,7 @@ function parser.lexRegex(regexStr)
     end
   end
 
-  tokens[#tokens + 1] = {type = "eof", source = ""}
+  tokens[#tokens + 1] = {type = "eof", source = "", position = pos + 1}
 
   return tokens
 end
@@ -293,6 +293,10 @@ function parser.parse(tokenList)
   if tokenList[#tokenList - 1].type == "eos" then
     props.clampEnd = true
     table.remove(tokenList, #tokenList - 1)
+  end
+
+  if #tokenList == 1 then
+    error("Empty regex", 0)
   end
 
   local ret = RE()

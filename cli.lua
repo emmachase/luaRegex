@@ -2,15 +2,16 @@
 -- Command Line Interface to luaRegex
 
 local r2l = require("r2l")
+
 local getopt = require("getopt")
 local term = require("termutils")
 
 local pprint = require("pprint")
 
-local parser = require("parser")
-
 local helpStr = [[
 %{cyan}Syntax: %{white}./cli.lua [OPTIONS] <regex>
+  <regex>: The regex source as a string
+
   OPTIONS:
     -h : Display this help message
 
@@ -18,8 +19,6 @@ local helpStr = [[
 
     -l : Stop after lex stage
     -p : Stop after parse stage
-
-  <regex>: The regex source as a string
 ]]
 
 local function printHelp()
@@ -68,16 +67,29 @@ if not regexSrc then
   return printHelp()
 end
 
-local tokens = parser.lexRegex(regexSrc)
+if regexSrc == "" then
+  term.printError("Regex cannot be empty.")
+  return printHelp()
+end
+
+local tokens = r2l.parser.lexRegex(regexSrc)
 if stopStage == "lex" then
   pprint(tokens)
 
   return
 end
 
-local parsedRegex = parser.parse(tokens)
+local parseSuccess, parsedRegex = pcall(r2l.parser.parse, tokens)
+if not parseSuccess then
+  term.printError("Parse Error: %{white}" .. parsedRegex .. "\n%{cyan}Aborting...")
+  return
+end
+
 if stopStage == "parse" then
   pprint(parsedRegex)
 
   return
 end
+
+local origNFA = r2l.generateNFA(parsedRegex)
+pprint(origNFA)
