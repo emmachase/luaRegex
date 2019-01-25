@@ -33,6 +33,11 @@ local function emptyMachine(noAccept)
   return machine
 end
 
+local function addEnter(state, value)
+  state.enter = state.enter or {}
+  state.enter[#state.enter + 1] = value
+end
+
 function r2l.concatMachines(first, second)
   local newMachine = util.deepClone(first)
 
@@ -120,6 +125,12 @@ function r2l.generateFromCapture(atom)
         end
       end
     end
+  elseif capture.type == "group" then
+    machine = r2l.generateNFA(capture[1])
+    addEnter(machine.states[machine.startState], "begin-group")
+    for k in pairs(machine.acceptStates) do
+      addEnter(machine.states[k], "end-group")
+    end
   else
     error("Unimplemented capture: '" .. capture.type .. "'")
   end
@@ -127,20 +138,32 @@ function r2l.generateFromCapture(atom)
   if atom.type == "atom" then
     return machine
   elseif atom.type == "plus" then
+    addEnter(machine.states[machine.startState], "begin-sort")
+
     for k in pairs(machine.acceptStates) do
       local es = machine.states[k].edges
       es[#es + 1] = {condition = r2l.epsilon, dest = machine.startState}
+
+      -- Mark the state for recording, used for path reduction later
+      addEnter(machine.states[k], "maximize")
     end
 
     return machine
   elseif atom.type == "ng-plus" then
+    addEnter(machine.states[machine.startState], "begin-sort")
+
     for k in pairs(machine.acceptStates) do
       local es = machine.states[k].edges
       es[#es + 1] = {condition = r2l.epsilon, priority = "low", dest = machine.startState}
+
+      -- Mark the state for recording
+      addEnter(machine.states[k], "minimize")
     end
 
     return machine
   elseif atom.type == "star" then
+    addEnter(machine.states[machine.startState], "begin-sort")
+
     local needStart = true
     for k in pairs(machine.acceptStates) do
       local es = machine.states[k].edges
@@ -148,6 +171,9 @@ function r2l.generateFromCapture(atom)
       if k == machine.startState then
         needStart = false
       end
+
+      -- Mark the state for recording
+      addEnter(machine.states[k], "maximize")
     end
 
     if needStart then
@@ -156,6 +182,8 @@ function r2l.generateFromCapture(atom)
 
     return machine
   elseif atom.type == "ng-star" then
+    addEnter(machine.states[machine.startState], "begin-sort")
+
     local needStart = true
     for k in pairs(machine.acceptStates) do
       local es = machine.states[k].edges
@@ -163,6 +191,9 @@ function r2l.generateFromCapture(atom)
       if k == machine.startState then
         needStart = false
       end
+
+      -- Mark the state for recording
+      addEnter(machine.states[k], "minimize")
     end
 
     if needStart then
