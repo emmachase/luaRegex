@@ -14,4 +14,19 @@ function util.deepClone(tab)
   return nt
 end
 
+function util.nub(tab)
+  local entries = {}
+  local nt, i = {}, 1
+
+  for k, v in pairs(tab) do
+    if not entries[v] then
+      entries[v] = true
+      nt[i] = v
+      i = i + 1
+    end
+  end
+
+  return nt
+end
+
 return util

@@ -19,6 +19,7 @@ local helpStr = [[
 
     -l : Stop after lex stage
     -p : Stop after parse stage
+    -g : Stop after initial generation (unoptimised, so very large output)
 ]]
 
 local function printHelp()
@@ -29,7 +30,7 @@ local stopStage = "none"
 
 local regexSrc
 local outputFile = io.stdout
-getopt({...}, "-o:hlp", {
+getopt({...}, "-o:hlpgr", {
   help = {
     hasArg = getopt.noArgument,
     val = "h"
@@ -59,6 +60,12 @@ getopt({...}, "-o:hlp", {
   end,
   p = function()
     stopStage = "parse"
+  end,
+  g = function()
+    stopStage = "igen"
+  end,
+  r = function()
+    stopStage = "dfa"
   end
 }
 
@@ -74,22 +81,19 @@ end
 
 local tokens = r2l.parser.lexRegex(regexSrc)
 if stopStage == "lex" then
-  pprint(tokens)
-
-  return
-end
+  return pprint(tokens) end
 
 local parseSuccess, parsedRegex = pcall(r2l.parser.parse, tokens)
 if not parseSuccess then
-  term.printError("Parse Error: %{white}" .. parsedRegex .. "\n%{cyan}Aborting...")
-  return
-end
+  return term.printError("Parse Error: %{white}" .. parsedRegex .. "\n%{cyan}Aborting...") end
 
 if stopStage == "parse" then
-  pprint(parsedRegex)
+  return pprint(parsedRegex) end
 
-  return
-end
+local origNFA = r2l.nfactory.generateNFA(parsedRegex)
+if stopStage == "igen" then
+  return pprint(origNFA) end
 
-local origNFA = r2l.generateNFA(parsedRegex)
-pprint(origNFA)
+local origDFA = r2l.reducer.reduceNFA(origNFA)
+if stopStage == "dfa" then
+  return pprint(origDFA) end

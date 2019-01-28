@@ -1,3 +1,5 @@
+-- luacheck: ignore
+
 local pprint = { VERSION = '0.1' }
 
 local depth = 1
