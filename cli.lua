@@ -20,6 +20,7 @@ local helpStr = [[
     -l : Stop after lex stage
     -p : Stop after parse stage
     -g : Stop after initial generation (unoptimised, so very large output)
+    -r : Stop after reducing the naiive NFA to DFA
 ]]
 
 local function printHelp()
@@ -97,3 +98,5 @@ if stopStage == "igen" then
 local origDFA = r2l.reducer.reduceNFA(origNFA)
 if stopStage == "dfa" then
   return pprint(origDFA) end
+
+outputFile:write(r2l.emitter.generateLua(origDFA))

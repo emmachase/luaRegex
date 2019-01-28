@@ -112,6 +112,7 @@ function dr.reduceNFA(nfa)
 
       if not completeStates[destState] then
         todoStates[#todoStates + 1] = st
+        completeStates[destState] = true
       end
     end
 

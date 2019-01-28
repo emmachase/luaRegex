@@ -95,9 +95,9 @@ function nf.generateFromCapture(atom)
       acceptStates = {[cName] = true}
     }
 
-    local sStates = machine.states[sName]
+    local sEdges = machine.states[sName].edges
     for i = 1, 255 do
-      sStates[#sStates + 1] = {condition = string.char(i), dest = cName}
+      sEdges[#sEdges + 1] = {condition = string.char(i), dest = cName}
     end
   elseif capture.type == "set" or capture.type == "negset" then
     local sName, cName = genName(), genName()
