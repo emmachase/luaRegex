@@ -213,6 +213,12 @@ function nf.generateFromCapture(atom)
     end
 
     return machine
+  elseif atom.type == "optional" then
+    machine.acceptStates[machine.startState] = true
+
+    return machine
+  else
+    error("Unimplemented atom type: '" .. atom.type .. "'")
   end
 end
 
