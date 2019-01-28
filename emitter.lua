@@ -156,7 +156,7 @@ local acceptStates = {]]
   end
 
   output = output .. [[}
-return function match(str)
+return function(str)
   local strlen = #str
   local allMatches, ai = {}, 1
   
