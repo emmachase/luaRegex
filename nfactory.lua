@@ -36,7 +36,7 @@ function nf.semanticClone(machine)
   local cmachine = util.deepClone(machine)
 
   -- Rename all states so there are no collisions
-  local suffix = "z" .. genName()
+  local suffix = genName()
   cmachine.startState = cmachine.startState .. suffix
   local astates = {}
   for k in pairs(cmachine.acceptStates) do
