@@ -32,6 +32,42 @@ local function addEnter(state, value)
   state.enter[#state.enter + 1] = value
 end
 
+function nf.semanticClone(machine)
+  local cmachine = util.deepClone(machine)
+
+  -- Rename all states so there are no collisions
+  local suffix = "z" .. genName()
+  cmachine.startState = cmachine.startState .. suffix
+  local astates = {}
+  for k in pairs(cmachine.acceptStates) do
+    astates[#astates + 1] = k
+  end
+
+  for i = 1, #astates do
+    local k, v = astates[i], cmachine.acceptStates[astates[i]]
+    cmachine.acceptStates[k] = nil
+    cmachine.acceptStates[k .. suffix] = v
+  end
+
+  local states = {}
+  for k in pairs(cmachine.states) do
+    states[#states + 1] = k
+  end
+
+  for j = 1, #states do
+    local k, v = states[j], cmachine.states[states[j]]
+
+    for i = 1, #v.edges do
+      v.edges[i].dest = v.edges[i].dest .. suffix
+    end
+
+    cmachine.states[k] = nil
+    cmachine.states[k .. suffix] = v
+  end
+
+  return cmachine
+end
+
 function nf.concatMachines(first, second)
   local newMachine = util.deepClone(first)
 
@@ -217,6 +253,32 @@ function nf.generateFromCapture(atom)
     machine.acceptStates[machine.startState] = true
 
     return machine
+  elseif atom.type == "quantifier" then
+    local quantifier = atom.quantifier
+    if quantifier.type == "count" then
+      local single = machine
+      for _ = 2, quantifier.count do
+        machine = nf.concatMachines(single, nf.semanticClone(machine))
+      end
+
+      return machine
+    else -- range
+      local single = machine
+      for _ = 2, quantifier.min do
+        machine = nf.concatMachines(single, nf.semanticClone(machine))
+      end
+
+      -- All in this range are valid, so setup those links
+      for _ = quantifier.min + 1, quantifier.max do
+        local prevMachine = nf.semanticClone(machine)
+        machine = nf.concatMachines(prevMachine, util.deepClone(single))
+        for k, v in pairs(prevMachine.acceptStates) do
+          machine.acceptStates[k] = v
+        end
+      end
+
+      return machine
+    end
   else
     error("Unimplemented atom type: '" .. atom.type .. "'")
   end

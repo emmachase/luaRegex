@@ -39,6 +39,8 @@ function parser.lexRegex(regexStr)
     ["?"] = "optional",
     ["("] = "l-paren",
     [")"] = "r-paren",
+    ["{"] = "l-bracket",
+    ["}"] = "r-bracket",
     ["."] = "any",
     ["^"] = "start",
     ["$"] = "eos",
@@ -105,11 +107,13 @@ Grammar:
 <union-list> ::= "|" <simple-RE> <union-list> | <lambda>
 <simple-RE>     ::= <basic-RE> <basic-RE-list>
 <basic-RE-list> ::= <basic-RE> <basic-RE-list> | <lambda>
-<basic-RE>  ::= <star> | <plus> | <ng-star> | <ng-plus> | <elementary-RE>
+<basic-RE>  ::= <star> | <plus> | <ng-star> | <ng-plus> | <quantifier> | <elementary-RE>
 <star>  ::= <elementary-RE> "*"
 <plus>  ::= <elementary-RE> "+"
 <ng-star>  ::= <elementary-RE> "*?"
 <ng-plus>  ::= <elementary-RE> "+?"
+<quantifier>  ::= <elementary-RE> "{" <quantity> "}"
+<quantity>    ::= <digit> "," <digit> | <digit> ","
 <elementary-RE>     ::= <group> | <any> | <eos> | <char> | <set>
 <group>     ::=     "(" <RE> ")"
 <any>   ::=     "."
@@ -127,7 +131,7 @@ Special Chars: | * + *? +? ( ) . $ \ [ [^ ] -
 ]]
 
 function parser.parse(tokenList)
-  local RE, unionList, simpleRE, basicRE, basicREList, elementaryRE, group, set, setItems, setItem
+  local RE, unionList, simpleRE, basicRE, basicREList, elementaryRE, quantifier, group, set, setItems, setItem
 
   local parseTable = {
     unionList = {["union"] = 1, default = 2},
@@ -142,6 +146,19 @@ function parser.parse(tokenList)
 
   local function uneat(token)
     table.insert(tokenList, 1, token)
+  end
+
+  local function expect(token, source)
+    local tok = eat()
+    if tok.type ~= token then
+      error("Unexpected token '" .. tok.type .. "' at position " .. tok.position, 0)
+    end
+
+    if source and not tok.source:match(source) then
+      error("Unexpected '" .. tok.source .. "' at position " .. tok.position, 0)
+    end
+
+    return tok
   end
 
   local function getMyType(name, index)
@@ -187,7 +204,7 @@ function parser.parse(tokenList)
     return {type = "simpleRE", basicRE(), unrollLoop(basicREList())}
   end
 
-  -- <basic-RE> ::= <star> | <plus> | <ng-star> | <ng-plus> | <elementary-RE>
+  -- <basic-RE> ::= <star> | <plus> | <ng-star> | <ng-plus> | <quantifier> | <elementary-RE>
   function basicRE()
     local atom = elementaryRE()
 
@@ -203,10 +220,59 @@ function parser.parse(tokenList)
       return {type = "ng-plus", atom}
     elseif type == "optional" then
       return {type = "optional", atom}
+    elseif type ==  "l-bracket" then
+      uneat(token)
+
+      return {type = "quantifier", atom, quantifier = quantifier()}
     else
       uneat(token)
       return {type = "atom", atom}
     end
+  end
+
+  -- <quantifier>  ::= <elementary-RE> "{" <quantity> "}"
+  -- <quantity>    ::= <digit> "," <digit> | <digit> ","
+  function quantifier()
+    expect("l-bracket")
+
+    local firstDigit = ""
+    do
+      local nextTok = expect("char", "%d")
+      local src = nextTok.source
+      repeat
+        firstDigit = firstDigit .. src
+
+        nextTok = eat()
+
+        src = nextTok.source
+      until src:match("%D")
+      uneat(nextTok)
+    end
+
+    if tokenList[1].type == "r-bracket" then
+      eat()
+
+      local count = tonumber(firstDigit)
+      return {type = "count", count = count}
+    end
+    expect("char", ",")
+
+    local secondDigit = ""
+    if tokenList[1].source:match("%d") then
+      local src, nextTok = ""
+      repeat
+        secondDigit = secondDigit .. src
+
+        nextTok = eat()
+
+        src = nextTok.source
+      until src:match("%D")
+      uneat(nextTok)
+    end
+
+    expect("r-bracket")
+
+    return {type = "range", min = tonumber(firstDigit), max = tonumber(secondDigit) or math.huge}
   end
 
   -- <basic-RE-list> ::= <basic-RE> <basic-RE-list> | <lambda>

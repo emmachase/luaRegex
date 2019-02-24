@@ -100,3 +100,4 @@ if stopStage == "dfa" then
   return pprint(origDFA) end
 
 outputFile:write(r2l.emitter.generateLua(origDFA))
+outputFile:close()
