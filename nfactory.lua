@@ -268,12 +268,25 @@ function nf.generateFromCapture(atom)
         machine = nf.concatMachines(single, nf.semanticClone(machine))
       end
 
-      -- All in this range are valid, so setup those links
-      for _ = quantifier.min + 1, quantifier.max do
+      if quantifier.max == math.huge then
         local prevMachine = nf.semanticClone(machine)
         machine = nf.concatMachines(prevMachine, util.deepClone(single))
         for k, v in pairs(prevMachine.acceptStates) do
           machine.acceptStates[k] = v
+        end
+
+        for k in pairs(machine.acceptStates) do
+          local es = machine.states[k].edges
+          es[#es + 1] = {condition = nf.epsilon, dest = single.startState}
+        end
+      else
+        -- All in this range are valid, so setup those links
+        for _ = quantifier.min + 1, quantifier.max do
+          local prevMachine = nf.semanticClone(machine)
+          machine = nf.concatMachines(prevMachine, util.deepClone(single))
+          for k, v in pairs(prevMachine.acceptStates) do
+            machine.acceptStates[k] = v
+          end
         end
       end
 
