@@ -1,3 +1,5 @@
+local util = require("util")
+
 local emitter = {}
 
 -- local counter = 0
@@ -57,7 +59,7 @@ local function generateFunction(state)
 
   local prefix = "if"
   for dest, conds in pairs(dests) do
-    output = output .. "\n    " .. prefix .. " char:match(\"["
+    output = output .. "\n    " .. prefix
 
     table.sort(conds)
     local ranges = {}
@@ -96,37 +98,54 @@ local function generateFunction(state)
       end
     end
 
+    local first = true
+
     for i = 1, #ranges do
       local range = ranges[i]
 
-      if range[1] == "]" then
-        output = output .. "%]"
-      elseif range[1]:match("[a-zA-Z]") then
-        output = output .. range[1]
+      if first then
+        first = false
       else
-        output = output .. "\\" .. range[1]:byte()
+        output = output .. " or"
       end
 
-      output = output .. "-"
+      output = output .. " (char >= " .. range[1]:byte() .. " and char <= " .. range[2]:byte() .. ")"
 
-      if range[2] == "]" then
-        output = output .. "%]"
-      elseif range[2]:match("[a-zA-Z]") then
-        output = output .. range[2]
-      else
-        output = output .. "\\" .. range[2]:byte()
-      end
+      -- if range[1] == "]" then
+      --   output = output .. "%]"
+      -- elseif range[1]:match("[a-zA-Z]") then
+      --   output = output .. range[1]
+      -- else
+      --   output = output .. "\\" .. range[1]:byte()
+      -- end
+
+      -- output = output .. "-"
+
+      -- if range[2] == "]" then
+      --   output = output .. "%]"
+      -- elseif range[2]:match("[a-zA-Z]") then
+      --   output = output .. range[2]
+      -- else
+      --   output = output .. "\\" .. range[2]:byte()
+      -- end
     end
 
     for i = 1, #singles do
-      if singles[i]:match("[a-zA-Z]") then
-        output = output .. singles[i]
+      if first then
+        first = false
       else
-        output = output .. "%\\" .. singles[i]:byte()
+        output = output .. " or"
       end
+
+      output = output .. " char == " .. singles[i]:byte()
+      -- if singles[i]:match("[a-zA-Z]") then
+      --   output = output .. singles[i]
+      -- else
+      --   output = output .. "%\\" .. singles[i]:byte()
+      -- end
     end
 
-    output = output .. "]\") then return \"" .. dest .. "\""
+    output = output .. " then return " .. dest
 
     prefix = "elseif"
   end
@@ -136,23 +155,87 @@ local function generateFunction(state)
   return output
 end
 
+--[[
+  machine = {
+    states = {
+      [sName] = {edges = {}}
+    },
+    startState = sName,
+    acceptStates = {[sName] = true}
+  }
+]]
+
+local function numericize(dfa)
+  local newMachine = util.deepClone(dfa)
+
+  local oldNames = {}
+  local newNames = {}
+  local counter = 0
+  for k, v in pairs(dfa.states) do
+    counter = counter + 1
+
+    newMachine.states[k] = nil
+    newMachine.states[counter] = v
+    newNames[k] = counter
+    oldNames[counter] = k
+  end
+
+  for i = 1, counter do
+    local oldEdges = dfa.states[oldNames[i]].edges
+    local newEdges = newMachine.states[i].edges
+    local n = #oldEdges
+
+    for j = 1, n do
+      newEdges[j].dest = newNames[oldEdges[j].dest]
+    end
+  end
+
+  newMachine.startState = newNames[dfa.startState]
+  for k, v in pairs(dfa.acceptStates) do
+    newMachine.acceptStates[k] = nil
+    newMachine.acceptStates[newNames[k]] = v
+  end
+
+  return newMachine
+end
+
 function emitter.generateLua(dfa)
+  dfa = numericize(dfa)
+
   local output = [[
 local unpack = unpack or table.unpack
 
 local states = {
 ]]
 
-  for stateName, state in pairs(dfa.states) do
-    output = output .. "  " .. stateName .. " = " .. generateFunction(state) .. ",\n"
+  for i = 1, #dfa.states do
+    local state = dfa.states[i]
+    output = output .. "  " .. generateFunction(state) .. ",\n"
   end
+
+  output = output .. [[}
+
+local stateEntries = {
+]]
+
+for i = 1, #dfa.states do
+  output = output .. "  {"
+
+  local state = dfa.states[i]
+  local entries = util.nub(state.enter)
+  for j = 1, #entries do
+    output = output .. "'" .. entries[j] .. "',"
+  end
+
+  output = output .. "},\n"
+end
 
   output = output .. [[}
 
 local acceptStates = {]]
 
   for state in pairs(dfa.acceptStates) do
-    output = output .. state .." = true,"
+    output = output .. "[" .. state .."] = true,"
   end
 
   output = output .. [[}
@@ -169,11 +252,12 @@ return function(str)
   end
 
   output = output .. [[
-    local state = "]]
+    local state = ]]
 
   output = output .. dfa.startState
 
-  output = output .. [["
+  output = output .. [[
+
     local ci = startChar - 1
     while state and ci <= strlen do
       if acceptStates[state] then
@@ -194,7 +278,10 @@ return function(str)
         end
       end
 
-      state = states[state](str:sub(ci + 1, ci + 1))
+      local char = str:sub(ci + 1, ci + 1):byte()
+      if char then
+        state = states[state](char)
+      end
 
       ci = ci + 1
     end

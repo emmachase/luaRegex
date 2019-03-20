@@ -175,9 +175,10 @@ function nf.generateFromCapture(atom)
     end
   elseif capture.type == "group" then
     machine = nf.generateNFA(capture[1])
-    addEnter(machine.states[machine.startState], "begin-group")
+    local instance = genName()
+    addEnter(machine.states[machine.startState], "begin-group-" .. instance)
     for k in pairs(machine.acceptStates) do
-      addEnter(machine.states[k], "end-group")
+      addEnter(machine.states[k], "end-group-" .. instance)
     end
   else
     error("Unimplemented capture: '" .. capture.type .. "'")
@@ -186,31 +187,34 @@ function nf.generateFromCapture(atom)
   if atom.type == "atom" then
     return machine
   elseif atom.type == "plus" then
-    addEnter(machine.states[machine.startState], "begin-sort")
+    local instance = genName()
+    addEnter(machine.states[machine.startState], "begin-sort-" .. instance)
 
     for k in pairs(machine.acceptStates) do
       local es = machine.states[k].edges
       es[#es + 1] = {condition = nf.epsilon, dest = machine.startState}
 
       -- Mark the state for recording, used for path reduction later
-      addEnter(machine.states[k], "maximize")
+      addEnter(machine.states[k], "maximize-" .. instance)
     end
 
     return machine
   elseif atom.type == "ng-plus" then
-    addEnter(machine.states[machine.startState], "begin-sort")
+    local instance = genName()
+    addEnter(machine.states[machine.startState], "begin-sort-" .. instance)
 
     for k in pairs(machine.acceptStates) do
       local es = machine.states[k].edges
       es[#es + 1] = {condition = nf.epsilon, priority = "low", dest = machine.startState}
 
       -- Mark the state for recording
-      addEnter(machine.states[k], "minimize")
+      addEnter(machine.states[k], "minimize-" .. instance)
     end
 
     return machine
   elseif atom.type == "star" then
-    addEnter(machine.states[machine.startState], "begin-sort")
+    local instance = genName()
+    addEnter(machine.states[machine.startState], "begin-sort-" .. instance)
 
     local needStart = true
     for k in pairs(machine.acceptStates) do
@@ -221,7 +225,7 @@ function nf.generateFromCapture(atom)
       end
 
       -- Mark the state for recording
-      addEnter(machine.states[k], "maximize")
+      addEnter(machine.states[k], "maximize-" .. instance)
     end
 
     if needStart then
@@ -230,7 +234,8 @@ function nf.generateFromCapture(atom)
 
     return machine
   elseif atom.type == "ng-star" then
-    addEnter(machine.states[machine.startState], "begin-sort")
+    local instance = genName()
+    addEnter(machine.states[machine.startState], "begin-sort-" .. instance)
 
     local needStart = true
     for k in pairs(machine.acceptStates) do
@@ -241,7 +246,7 @@ function nf.generateFromCapture(atom)
       end
 
       -- Mark the state for recording
-      addEnter(machine.states[k], "minimize")
+      addEnter(machine.states[k], "minimize-" .. instance)
     end
 
     if needStart then
