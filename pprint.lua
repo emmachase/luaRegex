@@ -33,7 +33,7 @@ pprint.defaults = {
 }
 
 local TYPES = {
-    ['nil'] = 1, ['boolean'] = 2, ['number'] = 3, ['string'] = 4, 
+    ['nil'] = 1, ['boolean'] = 2, ['number'] = 3, ['string'] = 4,
     ['table'] = 5, ['function'] = 6, ['thread'] = 7, ['userdata'] = 8
 }
 
@@ -46,7 +46,7 @@ local ESCAPE_MAP = {
 -- generic utilities
 local function escape(s)
     s = s:gsub('([%c\\])', ESCAPE_MAP)
-    local dq = s:find('"') 
+    local dq = s:find('"')
     local sq = s:find("'")
     if dq and sq then
         return s:gsub('"', '\\"'), '"'
@@ -130,7 +130,7 @@ local function str_natural_cmp(lhs, rhs)
         if lsub ~= rsub then
             return lsub < rsub
         end
-        
+
         local lnum = tonumber(lhs:sub(lmid, lend))
         local rnum = tonumber(rhs:sub(rmid, rend))
         if lnum ~= rnum then
@@ -286,7 +286,7 @@ function pprint.pformat(obj, option, printer)
                     s = string.sub(s, seg+1)
                 end
                 _p(s) -- print the remaining parts
-                return ']]' 
+                return ']]'
             end
         end
 
@@ -338,7 +338,7 @@ function pprint.pformat(obj, option, printer)
         end
         for ix = 1,tlen do
             local v = t[ix]
-            if formatter[type(v)] == nop_formatter or 
+            if formatter[type(v)] == nop_formatter or
                (option.filter_function and option.filter_function(v, ix, t)) then
                -- pass
             else
@@ -366,7 +366,7 @@ function pprint.pformat(obj, option, printer)
         local function print_kv(k, v, t)
             -- can't use option.show_x as obj may contain custom type
             if formatter[type(v)] == nop_formatter or
-               formatter[type(k)] == nop_formatter or 
+               formatter[type(k)] == nop_formatter or
                (option.filter_function and option.filter_function(v, k, t)) then
                 return
             end

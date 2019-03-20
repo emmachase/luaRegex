@@ -4,7 +4,7 @@ local pprint = require("pprint")
 local util = require("util")
 
 local function isEpsilon(condition)
-  return type(condition) == "table" and condition.type == "epsilon" 
+  return type(condition) == "table" and condition.type == "epsilon"
 end
 
 local function traverseEpsilon(machine, state, seen)
@@ -92,7 +92,7 @@ function dr.reduceNFA(nfa)
     -- For each possible input, compute the resultant state, and create an edge
     for k, v in pairs(lang) do
       local st, si = {}, 1
-      
+
       for i = 1, #v do
         local throughput = eFunc[v[i]]
         for j = 1, #throughput do

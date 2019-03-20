@@ -58,7 +58,7 @@ local function generateFunction(state)
   local prefix = "if"
   for dest, conds in pairs(dests) do
     output = output .. "\n    " .. prefix .. " char:match(\"["
-    
+
     table.sort(conds)
     local ranges = {}
     local singles = {}
@@ -159,7 +159,7 @@ local acceptStates = {]]
 return function(str)
   local strlen = #str
   local allMatches, ai = {}, 1
-  
+
   ]]
 
   if dfa.properties.clampStart then
@@ -170,7 +170,7 @@ return function(str)
 
   output = output .. [[
     local state = "]]
-  
+
   output = output .. dfa.startState
 
   output = output .. [["
